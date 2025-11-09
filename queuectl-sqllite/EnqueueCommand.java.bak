@@ -1,0 +1,67 @@
+package com.queuectl.cli;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.queuectl.core.Job;
+import com.queuectl.core.JobState;
+import com.queuectl.core.SqliteJobRepository;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+
+import java.io.File;
+import java.nio.file.Files;
+import java.time.Instant;
+import java.util.UUID;
+
+@Command(name = "enqueue", description = "Enqueue a job by providing JSON or using --file <path>")
+public class EnqueueCommand implements Runnable {
+
+    @Parameters(index = "0", arity = "0..1", description = "Job JSON string (optional if --file is used)", paramLabel = "<jobJson>")
+    private String jobJson;
+
+    @Option(names = {"--file"}, description = "Path to a JSON file containing job details")
+    private File jsonFile;
+
+    @Override
+    public void run() {
+        try {
+            String payload;
+
+            if (jsonFile != null) {
+                if (!jsonFile.exists()) {
+                    System.err.println("File not found: " + jsonFile.getPath());
+                    return;
+                }
+                payload = Files.readString(jsonFile.toPath());
+            } else if (jobJson != null && !jobJson.isBlank()) {
+                payload = jobJson;
+            } else {
+                System.err.println("Provide job JSON or use --file <path>");
+                return;
+            }
+
+            ObjectMapper mapper = SqliteJobRepository.getMapper();
+            Job j = mapper.readValue(payload, Job.class);
+
+            if (j.getId() == null || j.getId().isBlank()) {
+                j.setId(UUID.randomUUID().toString());
+            }
+            if (j.getCommand() == null || j.getCommand().isBlank()) {
+                System.err.println("command is required");
+                return;
+            }
+            if (j.getMaxRetries() == null) j.setMaxRetries(3);
+            if (j.getState() == null) j.setState(JobState.PENDING);
+            Instant now = Instant.now();
+            if (j.getCreatedAt() == null) j.setCreatedAt(now);
+            j.setUpdatedAt(now);
+
+            SqliteJobRepository repo = SqliteJobRepository.instance();
+            repo.addJob(j);
+            System.out.println("✅ Enqueued job: " + j.getId());
+        } catch (Exception e) {
+            System.err.println("❌ Failed to enqueue: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+}

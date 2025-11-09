@@ -1,0 +1,1 @@
+{"command":"powershell -Command 'Write-Host \"Long job start\"; Start-Sleep -Seconds 5; Write-Host \"Long job done\"'","maxRetries":3}

@@ -1,0 +1,4 @@
+{
+  "command": "powershell -Command \"echo OK; Start-Sleep -Seconds 1\"",
+  "maxRetries": 3
+}
